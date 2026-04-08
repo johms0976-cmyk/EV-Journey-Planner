@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NZ EV Journey Planner</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css" crossorigin="anonymous"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css" crossorigin="anonymous"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js" crossorigin="anonymous"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Instrument+Serif:ital@0;1&display=swap');
+:root{
+  --bg:#0a0f1e;--surface:#111827;--surface2:#1a2235;--surface3:#212d45;
+  --border:#1e2d4a;--text:#e2e8f0;--dim:#7a8ba8;--accent:#22d3a7;
+  --accent2:#34d9b1;--accent-glow:rgba(34,211,167,.18);
+  --dc:#f59e0b;--ac:#22d3a7;--mixed:#a78bfa;--warn:#f87171;
+  --good:#4ade80;--radius:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;}
+
+.sidebar{width:420px;min-width:420px;height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:10;overflow:hidden;}
+.sidebar-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.sidebar-header h1{font-family:'Instrument Serif',serif;font-size:26px;font-weight:400;margin-bottom:2px;}
+.sidebar-header h1 span{color:var(--accent);}
+.sidebar-header p{font-size:12px;color:var(--dim);letter-spacing:.03em;}
+.sidebar-scroll{flex:1;overflow-y:auto;padding:20px 24px 100px;}
+.sidebar-scroll::-webkit-scrollbar{width:5px;}
+.sidebar-scroll::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:9px;}
+
+.section{margin-bottom:24px;}
+.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px;font-weight:500;}
+select,input[type=number],input[type=text]{width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;outline:none;transition:border .2s;-webkit-appearance:none;appearance:none;}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a8ba8' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;}
+select:focus,input:focus{border-color:var(--accent);}
+.row{display:flex;gap:10px;margin-bottom:10px;}
+.row>*{flex:1;}
+.field{margin-bottom:10px;}
+
+.addr-wrap{position:relative;}
+.addr-suggestions{position:absolute;top:100%;left:0;right:0;background:var(--surface2);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;max-height:180px;overflow-y:auto;z-index:20;display:none;}
+.addr-suggestions.show{display:block;}
+.addr-suggestion{padding:8px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border);}
+.addr-suggestion:hover{background:var(--surface3);}
+.addr-suggestion .main{color:var(--text);font-weight:500;}
+.addr-suggestion .sub{color:var(--dim);font-size:11px;}
+
+.soc-bar{position:relative;height:36px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);overflow:hidden;cursor:pointer;user-select:none;}
+.soc-fill{height:100%;border-radius:7px;transition:width .1s;display:flex;align-items:center;justify-content:flex-end;padding-right:12px;font-size:13px;font-weight:700;min-width:44px;}
+.soc-label{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--dim);pointer-events:none;}
+
+.specs-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px;}
+.specs-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.spec-item{text-align:center;padding:6px 4px;}
+.spec-val{font-size:18px;font-weight:700;color:var(--accent);font-family:'Instrument Serif',serif;}
+.spec-label{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
+.chem-badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;letter-spacing:.04em;margin-top:8px;}
+.chem-badge.lfp{background:rgba(74,222,128,.12);color:var(--good);}
+.chem-badge.nmc{background:rgba(248,113,113,.12);color:var(--warn);}
+.chem-badge.nca{background:rgba(251,191,36,.12);color:var(--dc);}
+.battery-tip{font-size:11px;color:var(--dim);margin-top:8px;padding:8px 10px;background:var(--bg);border-radius:8px;line-height:1.5;border-left:3px solid var(--accent);}
+
+.cycle-section{margin-top:10px;}
+.cycle-info{font-size:11px;color:var(--dim);margin-top:6px;padding:8px 10px;background:var(--bg);border-radius:8px;line-height:1.5;border-left:3px solid var(--dc);}
+.cycle-bar{height:8px;border-radius:4px;background:var(--surface3);overflow:hidden;margin-top:6px;}
+.cycle-bar-fill{height:100%;border-radius:4px;transition:width .3s;}
+
+.plan-btn{width:100%;padding:13px;background:var(--accent);color:var(--bg);border:none;border-radius:var(--radius);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.02em;transition:all .2s;margin-top:4px;}
+.plan-btn:hover{background:var(--accent2);transform:translateY(-1px);box-shadow:0 4px 20px var(--accent-glow);}
+.plan-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none;}
+
+.journey-summary{background:linear-gradient(135deg,#0d2818,#112233);border:1px solid rgba(34,211,167,.2);border-radius:var(--radius);padding:16px;margin-bottom:16px;}
+.summary-stats{display:flex;gap:0;justify-content:space-between;}
+.summary-stat{text-align:center;flex:1;}
+.summary-stat .val{font-size:20px;font-weight:700;color:var(--accent);font-family:'Instrument Serif',serif;}
+.summary-stat .lbl{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;}
+
+.stop-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;position:relative;transition:border-color .2s;cursor:pointer;}
+.stop-card:hover{border-color:var(--accent);}
+.stop-num{position:absolute;top:-8px;left:14px;background:var(--accent);color:var(--bg);font-size:10px;font-weight:700;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;}
+.stop-name{font-weight:600;font-size:14px;margin-bottom:2px;margin-top:4px;}
+.stop-addr{font-size:11px;color:var(--dim);margin-bottom:8px;}
+.stop-stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+.stop-tag{font-size:11px;padding:3px 8px;border-radius:6px;background:var(--bg);color:var(--text);font-weight:500;}
+.stop-tag .hi{color:var(--accent);font-weight:700;}
+.stop-tag .warn-hi{color:var(--dc);font-weight:700;}
+.charge-bar{display:flex;height:16px;border-radius:4px;overflow:hidden;background:var(--bg);margin-bottom:6px;}
+.charge-tip{font-size:11px;color:var(--dim);line-height:1.4;padding:6px 8px;background:var(--bg);border-radius:6px;border-left:2px solid var(--dc);}
+
+.od-marker{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);}
+.od-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;}
+.od-label{font-size:11px;color:var(--dim);}
+.od-name{font-size:13px;font-weight:600;}
+.od-soc{font-size:12px;color:var(--accent);font-weight:600;margin-left:auto;}
+
+.planning-spinner{display:flex;align-items:center;gap:10px;padding:20px;justify-content:center;color:var(--dim);font-size:13px;}
+
+#map{flex:1;height:100vh;z-index:1;}
+.leaflet-tile-pane{filter:brightness(.88) contrast(1.05) saturate(.75);}
+.leaflet-popup-content-wrapper{background:var(--surface) !important;color:var(--text) !important;border:1px solid var(--border) !important;border-radius:var(--radius) !important;font-family:'DM Sans',sans-serif !important;box-shadow:0 8px 32px rgba(0,0,0,.5) !important;}
+.leaflet-popup-tip{background:var(--surface) !important;}
+.leaflet-popup-content{margin:12px 14px !important;font-size:13px !important;line-height:1.5 !important;}
+.marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:var(--accent-glow) !important;}
+.marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:var(--accent) !important;color:var(--bg) !important;font-family:'DM Sans',sans-serif !important;font-weight:700 !important;}
+
+.loading{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .5s;}
+.loading.hide{opacity:0;pointer-events:none;}
+.loading h2{font-family:'Instrument Serif',serif;font-size:24px;font-weight:400;}
+.loading h2 span{color:var(--accent);}
+.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.charger-count{font-size:11px;color:var(--dim);margin-top:4px;}
+
+@media(max-width:800px){
+  body{flex-direction:column-reverse;}
+  .sidebar{width:100%;min-width:100%;height:55vh;border-right:none;border-top:1px solid var(--border);}
+  #map{height:45vh;}
+}
+</style>
+</head>
+<body>
+
+<div class="loading" id="loader">
+  <div class="spinner"></div>
+  <h2>Loading <span>EV Journey Planner</span></h2>
+  <p style="color:var(--dim);font-size:12px;" id="loader-msg">Fetching NZ charger data...</p>
+</div>
+
+<div class="sidebar">
+  <div class="sidebar-header">
+    <h1>NZ <span>EV</span> Journey Planner</h1>
+    <p>Plan your route with smart charging stops</p>
+  </div>
+  <div class="sidebar-scroll" id="sidebar-content">
+
+    <div class="section">
+      <div class="section-title">Your Vehicle</div>
+      <div class="row">
+        <div class="field"><label>Brand</label>
+          <select id="brand"><option value="">Select brand...</option></select>
+        </div>
+        <div class="field"><label>Model</label>
+          <select id="model"><option value="">Select model...</option></select>
+        </div>
+      </div>
+      <div id="specs-container"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Current Battery</div>
+      <div class="soc-bar" id="soc-bar">
+        <div class="soc-fill" id="soc-fill" style="width:80%">80%</div>
+        <span class="soc-label">Drag to set State of Charge</span>
+      </div>
+      <div class="cycle-section">
+        <label>Battery Cycles (from your BMS / app)</label>
+        <input type="number" id="cycles" min="0" max="5000" placeholder="e.g. 250" value="">
+        <div id="cycle-info"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Route</div>
+      <div class="field addr-wrap">
+        <label>From (address or city)</label>
+        <input type="text" id="origin" placeholder="e.g. 12 Queen St, Auckland" autocomplete="off">
+        <div class="addr-suggestions" id="origin-suggestions"></div>
+      </div>
+      <div class="field addr-wrap">
+        <label>To (address or city)</label>
+        <input type="text" id="destination" placeholder="e.g. 45 Lambton Quay, Wellington" autocomplete="off">
+        <div class="addr-suggestions" id="dest-suggestions"></div>
+      </div>
+      <button class="plan-btn" id="plan-btn" disabled>Plan Journey</button>
+    </div>
+
+    <div id="results"></div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<script>
+(function() {
+  "use strict";
+
+  /* ════════════ CAR DATABASE ════════════ */
+  var CARS = {
+    tesla: { name: 'Tesla', models: {
+      'm3sr':  { name:'Model 3 Standard Range+ (LFP)', battery:60, range:400, maxDC:170, chem:'LFP', efficiency:150 },
+      'm3lr':  { name:'Model 3 Long Range', battery:75, range:500, maxDC:250, chem:'NMC', efficiency:150 },
+      'm3p':   { name:'Model 3 Performance', battery:75, range:460, maxDC:250, chem:'NMC', efficiency:163 },
+      'mysr':  { name:'Model Y Standard Range (LFP)', battery:60, range:390, maxDC:170, chem:'LFP', efficiency:154 },
+      'mylr':  { name:'Model Y Long Range', battery:75, range:480, maxDC:250, chem:'NMC', efficiency:156 },
+      'myp':   { name:'Model Y Performance', battery:75, range:450, maxDC:250, chem:'NMC', efficiency:167 },
+      'ms':    { name:'Model S Long Range', battery:100, range:560, maxDC:250, chem:'NCA', efficiency:179 },
+      'mx':    { name:'Model X Long Range', battery:100, range:500, maxDC:250, chem:'NCA', efficiency:200 }
+    }},
+    mercedes: { name: 'Mercedes-Benz', models: {
+      'eqa':  { name:'EQA 250+', battery:70.5, range:400, maxDC:100, chem:'NMC', efficiency:176 },
+      'eqb':  { name:'EQB 250+', battery:70.5, range:370, maxDC:100, chem:'NMC', efficiency:190 },
+      'eqe':  { name:'EQE 350+', battery:90.6, range:505, maxDC:170, chem:'NMC', efficiency:179 },
+      'eqs':  { name:'EQS 450+', battery:107.8, range:570, maxDC:200, chem:'NMC', efficiency:189 }
+    }},
+    byd: { name: 'BYD', models: {
+      'atto3':   { name:'Atto 3 Standard', battery:49.9, range:320, maxDC:70, chem:'LFP', efficiency:156 },
+      'atto3e':  { name:'Atto 3 Extended Range', battery:60.5, range:380, maxDC:80, chem:'LFP', efficiency:159 },
+      'dolphin':  { name:'Dolphin Standard', battery:44.9, range:340, maxDC:60, chem:'LFP', efficiency:132 },
+      'dolphine': { name:'Dolphin Extended', battery:60.4, range:427, maxDC:60, chem:'LFP', efficiency:141 },
+      'seal':     { name:'Seal Performance', battery:82.5, range:520, maxDC:150, chem:'NMC', efficiency:159 }
+    }},
+    mg: { name: 'MG', models: {
+      'mg4s':      { name:'MG4 Standard (LFP)', battery:51, range:300, maxDC:117, chem:'LFP', efficiency:170 },
+      'mg4l':      { name:'MG4 Long Range', battery:64, range:400, maxDC:140, chem:'NMC', efficiency:160 },
+      'mg4x':      { name:'MG4 XPower', battery:64, range:370, maxDC:140, chem:'NMC', efficiency:173 },
+      'zsev_exc':  { name:'ZS EV Excite (LFP)', battery:51, range:320, maxDC:76, chem:'LFP', efficiency:159 },
+      'zsev_ess':  { name:'ZS EV Essence (NMC)', battery:51, range:300, maxDC:76, chem:'NMC', efficiency:170 },
+      'zsev_lr':   { name:'ZS EV Long Range', battery:72.6, range:430, maxDC:92, chem:'NMC', efficiency:169 }
+    }},
+    kia: { name: 'Kia', models: {
+      'ev6s':  { name:'EV6 Standard Range', battery:58, range:370, maxDC:180, chem:'NMC', efficiency:157 },
+      'ev6l':  { name:'EV6 Long Range', battery:77.4, range:480, maxDC:240, chem:'NMC', efficiency:161 },
+      'ev6gt': { name:'EV6 GT', battery:77.4, range:400, maxDC:240, chem:'NMC', efficiency:194 },
+      'niro':  { name:'Niro EV', battery:64.8, range:380, maxDC:80, chem:'NMC', efficiency:171 },
+      'ev9':   { name:'EV9 Long Range', battery:99.8, range:430, maxDC:240, chem:'NMC', efficiency:232 }
+    }},
+    hyundai: { name: 'Hyundai', models: {
+      'ioniq5s':  { name:'Ioniq 5 Standard Range', battery:58, range:360, maxDC:180, chem:'NMC', efficiency:161 },
+      'ioniq5l':  { name:'Ioniq 5 Long Range', battery:77.4, range:480, maxDC:240, chem:'NMC', efficiency:161 },
+      'ioniq6l':  { name:'Ioniq 6 Long Range', battery:77.4, range:545, maxDC:240, chem:'NMC', efficiency:142 },
+      'konaev':   { name:'Kona Electric', battery:64.8, range:400, maxDC:77, chem:'NMC', efficiency:162 }
+    }},
+    nissan: { name: 'Nissan', models: {
+      'leaf40':  { name:'Leaf 40 kWh', battery:40, range:240, maxDC:46, chem:'NMC', efficiency:167 },
+      'leaf62':  { name:'Leaf e+ 62 kWh', battery:62, range:340, maxDC:100, chem:'NMC', efficiency:182 },
+      'ariya63': { name:'Ariya 63 kWh', battery:63, range:370, maxDC:130, chem:'NMC', efficiency:170 },
+      'ariya87': { name:'Ariya 87 kWh', battery:87, range:460, maxDC:130, chem:'NMC', efficiency:189 }
+    }},
+    bmw: { name: 'BMW', models: {
+      'ix1':  { name:'iX1 xDrive30', battery:64.7, range:370, maxDC:130, chem:'NMC', efficiency:175 },
+      'ix3':  { name:'iX3', battery:74, range:380, maxDC:150, chem:'NMC', efficiency:195 },
+      'i4':   { name:'i4 eDrive40', battery:83.9, range:480, maxDC:200, chem:'NMC', efficiency:175 },
+      'ix':   { name:'iX xDrive50', battery:105.2, range:510, maxDC:200, chem:'NMC', efficiency:206 }
+    }},
+    polestar: { name: 'Polestar', models: {
+      'ps2sr': { name:'Polestar 2 Standard Range', battery:69, range:400, maxDC:135, chem:'LFP', efficiency:173 },
+      'ps2lr': { name:'Polestar 2 Long Range', battery:78, range:480, maxDC:200, chem:'NMC', efficiency:163 }
+    }},
+    volvo: { name: 'Volvo', models: {
+      'xc40sr': { name:'XC40 Recharge (LFP)', battery:69, range:380, maxDC:135, chem:'LFP', efficiency:182 },
+      'xc40lr': { name:'XC40 Recharge Extended', battery:78, range:440, maxDC:200, chem:'NMC', efficiency:177 },
+      'c40':    { name:'C40 Recharge', battery:78, range:460, maxDC:200, chem:'NMC', efficiency:170 }
+    }}
+  };
+
+  /* ════════════ CYCLE DEGRADATION ════════════ */
+  function cycleDeg(chem, cycles) {
+    if (!cycles && cycles !== 0) return null;
+    // Approximate remaining capacity %
+    // LFP: ~3000 cycles to 80%, very linear
+    // NMC: ~1500 cycles to 80%
+    // NCA: ~1000 cycles to 80%
+    var ratePerCycle;
+    if (chem === 'LFP') ratePerCycle = 20 / 3000;
+    else if (chem === 'NCA') ratePerCycle = 20 / 1000;
+    else ratePerCycle = 20 / 1500;
+    var lost = Math.min(cycles * ratePerCycle, 40);
+    return { remaining: Math.max(60, Math.round((100 - lost) * 10) / 10), lost: Math.round(lost * 10) / 10 };
+  }
+
+  function cycleAdvice(chem, cycles, deg) {
+    var maxCycles = chem === 'LFP' ? 3000 : chem === 'NCA' ? 1000 : 1500;
+    var pct = Math.round((cycles / maxCycles) * 100);
+    var h = '<div class="cycle-bar"><div class="cycle-bar-fill" style="width:' + Math.min(pct, 100) + '%;background:' + (pct > 80 ? '#f87171' : pct > 50 ? '#f59e0b' : '#4ade80') + '"></div></div>';
+    h += '<div class="cycle-info">';
+    h += '<b>' + cycles + ' cycles</b> — est. <b>' + deg.remaining + '%</b> capacity remaining<br>';
+    if (pct < 30) {
+      h += 'Your battery is in excellent health. ';
+      if (chem === 'LFP') h += 'LFP batteries are very durable — keep charging to 100% daily.';
+      else h += 'Keep daily charging to 80% to maximise longevity.';
+    } else if (pct < 60) {
+      h += 'Battery is in good condition with normal wear. ';
+      if (chem !== 'LFP') h += 'Consider keeping charge between 20-80% more strictly to slow degradation.';
+      else h += 'LFP durability means you have plenty of life left.';
+    } else if (pct < 85) {
+      h += 'Moderate wear detected. You may notice slightly reduced range. ';
+      h += 'Avoid frequent fast charging above 80% and extreme temperatures where possible.';
+    } else {
+      h += 'Significant cycle usage. Battery health monitoring recommended. ';
+      h += 'Consider a battery health check at your dealer.';
+    }
+    h += '<br><small style="color:var(--dim)">Typical ' + chem + ' lifespan: ~' + maxCycles + ' cycles to 80% capacity</small>';
+    h += '</div>';
+    return h;
+  }
+
+  /* ════════════ STATE ════════════ */
+  var currentSOC = 80;
+  var selectedCar = null;
+  var allChargers = [];
+  var routeLayer = null;
+  var stopMarkers = [];
+  var originCoord = null;   // { lat, lng, name }
+  var destCoord = null;
+
+  /* ════════════ MAP ════════════ */
+  var mymap = L.map('map', { center:[-41.3,174], zoom:6, zoomControl:false });
+  window._map = mymap;
+
+  L.control.zoom({ position:'bottomright' }).addTo(mymap);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://carto.com">CARTO</a> | Charger data: <a href="https://www.nzta.govt.nz/planning-and-investment/planning/transport-planning/planning-for-electric-vehicles/evroam">NZTA EVRoam</a>',
+    maxZoom: 19
+  }).addTo(mymap);
+
+  var chargerCluster = L.markerClusterGroup({ maxClusterRadius:45, showCoverageOnHover:false });
+  mymap.addLayer(chargerCluster);
+
+  /* ════════════ CAR UI ════════════ */
+  var brandSel = document.getElementById('brand');
+  var modelSel = document.getElementById('model');
+  var specsCont = document.getElementById('specs-container');
+
+  // Populate brands
+  var brandKeys = Object.keys(CARS).sort(function(a,b){ return CARS[a].name.localeCompare(CARS[b].name); });
+  brandKeys.forEach(function(k){ brandSel.add(new Option(CARS[k].name, k)); });
+
+  brandSel.addEventListener('change', function() {
+    var b = brandSel.value;
+    modelSel.innerHTML = '<option value="">Select model...</option>';
+    specsCont.innerHTML = '';
+    selectedCar = null;
+    checkReady();
+    if (!b || !CARS[b]) return;
+    var models = CARS[b].models;
+    for (var k in models) {
+      if (models.hasOwnProperty(k)) modelSel.add(new Option(models[k].name, k));
+    }
+  });
+
+  modelSel.addEventListener('change', function() {
+    var b = brandSel.value, mk = modelSel.value;
+    if (!b || !mk || !CARS[b]) { specsCont.innerHTML=''; selectedCar=null; checkReady(); return; }
+    var car = CARS[b].models[mk];
+    if (!car) { specsCont.innerHTML=''; selectedCar=null; checkReady(); return; }
+    selectedCar = { name:car.name, battery:car.battery, range:car.range, maxDC:car.maxDC, chem:car.chem, efficiency:car.efficiency, brand:CARS[b].name };
+    var cc = car.chem==='LFP' ? 'lfp' : car.chem==='NCA' ? 'nca' : 'nmc';
+    var tips = {
+      LFP: '<b>LFP Battery:</b> Safe to charge to 100% regularly. Less degradation from full charges. Calibrate BMS by charging to 100% weekly.',
+      NCA: '<b>NCA Battery:</b> Best kept between 20-90% for daily use. Avoid frequent 100% charges. Fast charging slows significantly above 80%.',
+      NMC: '<b>NMC Battery:</b> Charge to 80% daily for best longevity. Avoid prolonged storage at 100%. Optimal range is 20-80%.'
+    };
+    specsCont.innerHTML = '<div class="specs-card">' +
+      '<div class="specs-grid">' +
+        '<div class="spec-item"><div class="spec-val">' + car.battery + ' kWh</div><div class="spec-label">Battery</div></div>' +
+        '<div class="spec-item"><div class="spec-val">' + car.range + ' km</div><div class="spec-label">Real Range</div></div>' +
+        '<div class="spec-item"><div class="spec-val">' + car.maxDC + ' kW</div><div class="spec-label">Max DC Charge</div></div>' +
+        '<div class="spec-item"><div class="spec-val">' + car.efficiency + ' Wh/km</div><div class="spec-label">Efficiency</div></div>' +
+      '</div>' +
+      '<div style="text-align:center"><span class="chem-badge ' + cc + '">' + car.chem + ' Chemistry</span></div>' +
+      '<div class="battery-tip">' + tips[car.chem] + '</div>' +
+    '</div>';
+    updateCycleInfo();
+    checkReady();
+  });
+
+  /* ════════════ CYCLE INPUT ════════════ */
+  var cyclesInput = document.getElementById('cycles');
+  var cycleInfoDiv = document.getElementById('cycle-info');
+
+  function updateCycleInfo() {
+    var v = parseInt(cyclesInput.value);
+    if (!selectedCar || isNaN(v) || v < 0) { cycleInfoDiv.innerHTML = ''; return; }
+    var deg = cycleDeg(selectedCar.chem, v);
+    if (deg) cycleInfoDiv.innerHTML = cycleAdvice(selectedCar.chem, v, deg);
+  }
+  cyclesInput.addEventListener('input', updateCycleInfo);
+
+  /* ════════════ SOC BAR ════════════ */
+  var socBar = document.getElementById('soc-bar');
+  var socFill = document.getElementById('soc-fill');
+
+  function setSoc(p) {
+    currentSOC = Math.max(5, Math.min(100, Math.round(p)));
+    socFill.style.width = currentSOC + '%';
+    socFill.textContent = currentSOC + '%';
+    var h = currentSOC > 50 ? 160 : currentSOC > 20 ? 40 : 0;
+    var s = currentSOC > 50 ? '70%' : '80%';
+    socFill.style.background = 'hsl(' + h + ',' + s + ',45%)';
+  }
+
+  function socFromMouse(e) { var r = socBar.getBoundingClientRect(); setSoc(((e.clientX - r.left) / r.width) * 100); }
+  function socFromTouch(e) { if (e.touches && e.touches.length > 0) { var r = socBar.getBoundingClientRect(); setSoc(((e.touches[0].clientX - r.left) / r.width) * 100); } }
+
+  socBar.addEventListener('mousedown', function(e) {
+    socFromMouse(e);
+    function onMove(e2) { socFromMouse(e2); }
+    function onUp() { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  socBar.addEventListener('touchstart', function(e) {
+    e.preventDefault(); socFromTouch(e);
+    function onMove(e2) { socFromTouch(e2); }
+    function onEnd() { document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onEnd); }
+    document.addEventListener('touchmove', onMove);
+    document.addEventListener('touchend', onEnd);
+  }, { passive: false });
+  setSoc(80);
+
+  /* ════════════ ADDRESS AUTOCOMPLETE (Nominatim) ════════════ */
+  var geocodeTimer = null;
+  function setupAutocomplete(inputId, suggestionsId, setter) {
+    var inp = document.getElementById(inputId);
+    var sug = document.getElementById(suggestionsId);
+    inp.addEventListener('input', function() {
+      clearTimeout(geocodeTimer);
+      var q = inp.value.trim();
+      if (q.length < 3) { sug.classList.remove('show'); return; }
+      geocodeTimer = setTimeout(function() {
+        fetch('https://nominatim.openstreetmap.org/search?format=json&countrycodes=nz&limit=5&q=' + encodeURIComponent(q))
+          .then(function(r) { return r.json(); })
+          .then(function(results) {
+            sug.innerHTML = '';
+            if (!results.length) { sug.classList.remove('show'); return; }
+            results.forEach(function(r) {
+              var parts = r.display_name.split(',');
+              var main = parts[0];
+              var sub = parts.slice(1, 3).join(',').trim();
+              var d = document.createElement('div');
+              d.className = 'addr-suggestion';
+              d.innerHTML = '<div class="main">' + main + '</div><div class="sub">' + sub + '</div>';
+              d.addEventListener('click', function() {
+                inp.value = r.display_name;
+                setter({ lat: parseFloat(r.lat), lng: parseFloat(r.lon), name: parts.slice(0, 2).join(', ').trim() });
+                sug.classList.remove('show');
+                checkReady();
+              });
+              sug.appendChild(d);
+            });
+            sug.classList.add('show');
+          }).catch(function() { sug.classList.remove('show'); });
+      }, 400);
+    });
+    inp.addEventListener('blur', function() { setTimeout(function() { sug.classList.remove('show'); }, 200); });
+    inp.addEventListener('change', function() {
+      // If user typed but didn't select, clear coord
+      // We allow it but plan-btn stays disabled until geocoded
+    });
+  }
+
+  setupAutocomplete('origin', 'origin-suggestions', function(c) { originCoord = c; });
+  setupAutocomplete('destination', 'dest-suggestions', function(c) { destCoord = c; });
+
+  /* ════════════ READY CHECK ════════════ */
+  function checkReady() {
+    document.getElementById('plan-btn').disabled = !selectedCar || !originCoord || !destCoord;
+  }
+
+  /* ════════════ HELPERS ════════════ */
+  function haversine(lat1, lon1, lat2, lon2) {
+    var R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
+    var a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  function formatTime(m) { var h = Math.floor(m / 60), mn = Math.round(m % 60); return h ? h + 'h ' + mn + 'm' : mn + 'm'; }
+  function chargerColor(t) { if (t === 'DC') return '#f59e0b'; if (t === 'Mixed') return '#a78bfa'; return '#22d3a7'; }
+  function makeIcon(t, size) {
+    size = size || 12; var c = chargerColor(t);
+    return L.divIcon({ className:'', iconSize:[size,size], iconAnchor:[size/2,size/2],
+      html:'<div style="width:'+size+'px;height:'+size+'px;border-radius:50%;background:'+c+';border:2px solid rgba(255,255,255,.25);box-shadow:0 0 6px '+c+'66;"></div>' });
+  }
+  function stopIcon(n) {
+    return L.divIcon({ className:'', iconSize:[32,32], iconAnchor:[16,32],
+      html:'<div style="width:32px;height:32px;background:#22d3a7;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(34,211,167,.5);border:2px solid #fff;"><span style="transform:rotate(45deg);font-size:13px;font-weight:800;color:#0a0f1e;">' + n + '</span></div>' });
+  }
+
+  /* ════════════ CHARGE TIME MODEL ════════════ */
+  function calcChargeTime(car, fromSOC, toSOC) {
+    if (fromSOC >= toSOC) return 0;
+    var total = 0;
+    for (var s = fromSOC; s < toSOC; s += 5) {
+      var segEnd = Math.min(s + 5, toSOC);
+      var energy = car.battery * (segEnd - s) / 100;
+      var mid = (s + segEnd) / 2;
+      var rateMult;
+      if (car.chem === 'LFP') { rateMult = mid < 80 ? 0.85 : mid < 95 ? 0.45 : 0.18; }
+      else { rateMult = mid < 20 ? 0.80 : mid < 50 ? 0.92 : mid < 80 ? 0.65 : mid < 90 ? 0.30 : 0.15; }
+      total += (energy / (car.maxDC * rateMult)) * 60;
+    }
+    return Math.ceil(total);
+  }
+
+  function chargeTip(car, arr, dep) {
+    var cycles = parseInt(cyclesInput.value);
+    var cycleNote = '';
+    if (!isNaN(cycles) && cycles > 0) {
+      var deg = cycleDeg(car.chem, cycles);
+      if (deg && deg.remaining < 85) {
+        cycleNote = ' With ' + cycles + ' cycles (' + deg.remaining + '% capacity), actual range will be ~' + Math.round(car.range * deg.remaining / 100) + ' km.';
+      }
+    }
+    if (car.chem === 'LFP') {
+      if (dep >= 95) return 'LFP: Charging to ' + dep + '% is perfectly fine. LFP cells handle full charges without significant degradation.' + cycleNote;
+      return 'Quick charge to ' + dep + '%. Your LFP battery can safely go higher if you have extra time.' + cycleNote;
+    }
+    if (dep > 90) return car.chem + ': Charging above 90% is significantly slower and increases cell stress. Only do this if the range is essential.' + cycleNote;
+    if (dep > 80) return car.chem + ': Slight taper above 80%. Acceptable occasionally but 80% is the sweet spot for speed and longevity.' + cycleNote;
+    return car.chem + ': Staying in the 20-80% fast-charge zone. Optimal for both charge speed and long-term battery health.' + cycleNote;
+  }
+
+  /* ════════════ ROUTING ════════════ */
+  function fetchOSRM(a, b) {
+    var url = 'https://router.project-osrm.org/route/v1/driving/' + a.lng + ',' + a.lat + ';' + b.lng + ',' + b.lat + '?overview=full&geometries=geojson';
+    return fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+      if (d.routes && d.routes.length > 0) {
+        var rt = d.routes[0];
+        return { coords: rt.geometry.coordinates.map(function(c) { return [c[1], c[0]]; }), distance: rt.distance / 1000, duration: rt.duration / 60 };
+      }
+      throw new Error('No route found');
+    }).catch(function() {
+      var dist = haversine(a.lat, a.lng, b.lat, b.lng) * 1.35;
+      return { coords: [[a.lat, a.lng], [b.lat, b.lng]], distance: dist, duration: dist / 80 * 60 };
+    });
+  }
+
+  function chargersNearRoute(coords, radius) {
+    radius = radius || 5;
+    var step = Math.max(1, Math.floor(coords.length / 300));
+    var sample = [];
+    for (var i = 0; i < coords.length; i += step) sample.push(coords[i]);
+    sample.push(coords[coords.length - 1]);
+    var near = [];
+    allChargers.forEach(function(ch) {
+      var mn = Infinity, ni = 0;
+      sample.forEach(function(p, idx) {
+        var d = haversine(ch.lat, ch.lng, p[0], p[1]);
+        if (d < mn) { mn = d; ni = idx; }
+      });
+      if (mn <= radius) {
+        near.push({ lat:ch.lat, lng:ch.lng, name:ch.name, operator:ch.operator, address:ch.address, connectors:ch.connectors, type:ch.type, distFrac:ni/(sample.length-1), distFromRoute:mn });
+      }
+    });
+    return near.sort(function(a, b) { return a.distFrac - b.distFrac; });
+  }
+
+  function planStops(car, soc, totalDist, chargers) {
+    // Adjust range for cycle degradation
+    var effectiveRange = car.range;
+    var cycles = parseInt(cyclesInput.value);
+    if (!isNaN(cycles) && cycles > 0) {
+      var deg = cycleDeg(car.chem, cycles);
+      if (deg) effectiveRange = Math.round(car.range * deg.remaining / 100);
+    }
+
+    var socPerKm = 100 / effectiveRange;
+    var minArr = 10, buffer = 8;
+    var driven = 0, stops = [];
+    var dc = chargers.filter(function(c) { return c.type === 'DC' || c.type === 'Mixed'; });
+    var use = dc.length >= 2 ? dc : chargers;
+    var iter = 0;
+
+    while (driven < totalDist && iter++ < 20) {
+      var curRange = (soc - minArr - buffer) / socPerKm;
+      if (curRange >= (totalDist - driven)) break;
+      var best = null;
+      for (var i = 0; i < use.length; i++) {
+        var ch = use[i], cd = ch.distFrac * totalDist, dt = cd - driven;
+        if (dt <= 5) continue;
+        var sa = soc - (dt * socPerKm);
+        if (sa >= minArr) best = { lat:ch.lat, lng:ch.lng, name:ch.name, address:ch.address, type:ch.type, actualDist:cd, arrSOC:sa, distFrac:ch.distFrac };
+      }
+      if (!best) {
+        for (var j = 0; j < chargers.length; j++) {
+          var ch2 = chargers[j], cd2 = ch2.distFrac * totalDist, dt2 = cd2 - driven;
+          if (dt2 <= 5) continue;
+          var sa2 = soc - (dt2 * socPerKm);
+          if (sa2 >= minArr) best = { lat:ch2.lat, lng:ch2.lng, name:ch2.name, address:ch2.address, type:ch2.type, actualDist:cd2, arrSOC:sa2, distFrac:ch2.distFrac };
+        }
+      }
+      if (!best) { stops.push({ error:true, msg:'No reachable charger after ' + Math.round(driven) + ' km. Try starting with a higher SOC.' }); break; }
+
+      var distLeft = totalDist - best.actualDist;
+      var nextCh = null;
+      for (var ii = 0; ii < use.length; ii++) { if ((use[ii].distFrac * totalDist) - best.actualDist > 20) { nextCh = use[ii]; break; } }
+      var distNext = nextCh ? (nextCh.distFrac * totalDist - best.actualDist) : distLeft;
+      var target = Math.ceil(distNext * socPerKm + buffer + minArr);
+      if (car.chem === 'LFP') { target = Math.min(100, Math.max(target, 90)); }
+      else { target = Math.min(80, Math.max(target, 60)); if (distNext * socPerKm + buffer + minArr > 80) target = Math.min(95, Math.ceil(distNext * socPerKm + buffer + minArr + 5)); }
+      target = Math.min(100, target);
+
+      var ct = calcChargeTime(car, Math.round(best.arrSOC), target);
+      stops.push({ charger:best, arrSOC:Math.round(best.arrSOC), depSOC:target, chargeTime:ct, distFromStart:Math.round(best.actualDist), tip:chargeTip(car, Math.round(best.arrSOC), target) });
+      soc = target;
+      driven = best.actualDist;
+    }
+    var finalSOC = soc - ((totalDist - driven) * socPerKm);
+    return { stops:stops, arrivalSOC:Math.max(0, Math.round(finalSOC)) };
+  }
+
+  /* ════════════ PLAN JOURNEY ════════════ */
+  document.getElementById('plan-btn').addEventListener('click', function() {
+    if (!selectedCar || !originCoord || !destCoord) return;
+    var origin = originCoord, dest = destCoord;
+    var results = document.getElementById('results');
+    results.innerHTML = '<div class="planning-spinner"><div class="spinner"></div> Planning optimal route...</div>';
+
+    if (routeLayer) { mymap.removeLayer(routeLayer); routeLayer = null; }
+    stopMarkers.forEach(function(m) { mymap.removeLayer(m); });
+    stopMarkers = [];
+
+    // Detect inter-island (rough: lat -41.5 is the strait)
+    var originIsland = origin.lat > -41.5 ? 'N' : 'S';
+    var destIsland = dest.lat > -41.5 ? 'N' : 'S';
+    var ferry = originIsland !== destIsland;
+    var well = { lat:-41.2865, lng:174.7762, name:'Wellington' };
+    var pic = { lat:-41.2906, lng:174.001, name:'Picton' };
+
+    var legsPromise;
+    if (ferry) {
+      if (originIsland === 'N') {
+        legsPromise = Promise.all([fetchOSRM(origin, well), fetchOSRM(pic, dest)]).then(function(r) {
+          return [r[0], { ferry:true, from:well, to:pic, distance:92, duration:210 }, r[1]];
+        });
+      } else {
+        legsPromise = Promise.all([fetchOSRM(origin, pic), fetchOSRM(well, dest)]).then(function(r) {
+          return [r[0], { ferry:true, from:pic, to:well, distance:92, duration:210 }, r[1]];
+        });
+      }
+    } else {
+      legsPromise = fetchOSRM(origin, dest).then(function(r) { return [r]; });
+    }
+
+    legsPromise.then(function(legs) {
+      var allCoords = [], totalDist = 0, totalDrive = 0;
+      legs.forEach(function(l) {
+        if (l.ferry) { allCoords.push([l.from.lat, l.from.lng], [l.to.lat, l.to.lng]); }
+        else { allCoords = allCoords.concat(l.coords); }
+        totalDist += l.distance;
+        totalDrive += l.duration;
+      });
+
+      routeLayer = L.layerGroup();
+      legs.forEach(function(l) {
+        if (l.ferry) {
+          L.polyline([[l.from.lat,l.from.lng],[l.to.lat,l.to.lng]], { color:'#60a5fa', weight:3, dashArray:'8,8', opacity:0.7 }).addTo(routeLayer);
+        } else {
+          L.polyline(l.coords, { color:'#22d3a7', weight:4, opacity:0.8 }).addTo(routeLayer);
+          L.polyline(l.coords, { color:'#22d3a7', weight:8, opacity:0.12 }).addTo(routeLayer);
+        }
+      });
+
+      L.circleMarker([origin.lat,origin.lng], { radius:8, color:'#4ade80', fillColor:'#4ade80', fillOpacity:1, weight:2 }).bindPopup('<b>Start:</b> ' + origin.name).addTo(routeLayer);
+      L.circleMarker([dest.lat,dest.lng], { radius:8, color:'#f87171', fillColor:'#f87171', fillOpacity:1, weight:2 }).bindPopup('<b>End:</b> ' + dest.name).addTo(routeLayer);
+      routeLayer.addTo(mymap);
+      mymap.fitBounds(L.polyline(allCoords).getBounds().pad(0.1));
+
+      var driveCoords = [];
+      legs.forEach(function(l) { if (!l.ferry) driveCoords = driveCoords.concat(l.coords); });
+      var driveDist = legs.reduce(function(s, l) { return s + (l.ferry ? 0 : l.distance); }, 0);
+      var near = chargersNearRoute(driveCoords, 5);
+      var plan = planStops(selectedCar, currentSOC, driveDist, near);
+      var stops = plan.stops;
+      var arrivalSOC = plan.arrivalSOC;
+      var totCharge = stops.reduce(function(s, st) { return s + (st.chargeTime || 0); }, 0);
+      var ferryTime = ferry ? 210 : 0;
+
+      stops.forEach(function(st, i) {
+        if (st.error) return;
+        var ch = st.charger;
+        var m = L.marker([ch.lat, ch.lng], { icon:stopIcon(i+1) })
+          .bindPopup('<b>Stop ' + (i+1) + ': ' + ch.name + '</b><br>' + (ch.address||'') + '<br>Arrive ' + st.arrSOC + '% &rarr; Depart ' + st.depSOC + '%<br>~' + st.chargeTime + ' min')
+          .addTo(routeLayer);
+        stopMarkers.push(m);
+      });
+
+      // Cycle degradation note
+      var degNote = '';
+      var cycles = parseInt(cyclesInput.value);
+      if (!isNaN(cycles) && cycles > 0) {
+        var deg = cycleDeg(selectedCar.chem, cycles);
+        if (deg) {
+          var effRange = Math.round(selectedCar.range * deg.remaining / 100);
+          degNote = '<div class="charge-tip" style="margin-bottom:12px;border-left-color:var(--accent)"><b>Cycle-adjusted range:</b> ' + effRange + ' km (from ' + selectedCar.range + ' km new) based on ' + cycles + ' cycles / ' + deg.remaining + '% capacity remaining.</div>';
+        }
+      }
+
+      var h = '<div class="section" style="margin-top:8px"><div class="section-title">Journey Plan</div>' + degNote +
+        '<div class="journey-summary"><div class="summary-stats">' +
+          '<div class="summary-stat"><div class="val">' + Math.round(totalDist) + ' km</div><div class="lbl">Distance</div></div>' +
+          '<div class="summary-stat"><div class="val">' + formatTime(totalDrive + totCharge + ferryTime) + '</div><div class="lbl">Total Time</div></div>' +
+          '<div class="summary-stat"><div class="val">' + stops.filter(function(s){return !s.error;}).length + '</div><div class="lbl">Stops</div></div>' +
+          '<div class="summary-stat"><div class="val">' + formatTime(totCharge) + '</div><div class="lbl">Charging</div></div>' +
+        '</div></div>' +
+        '<div class="od-marker"><div class="od-dot" style="background:#4ade80"></div><div><div class="od-label">Start</div><div class="od-name">' + origin.name + '</div></div><div class="od-soc">' + currentSOC + '%</div></div>';
+
+      stops.forEach(function(st, i) {
+        if (st.error) {
+          h += '<div class="stop-card" style="border-color:#f87171"><div class="stop-num" style="background:#f87171">!</div><div class="stop-name" style="color:#f87171">' + st.msg + '</div></div>';
+          return;
+        }
+        var ch = st.charger;
+        var ac = st.arrSOC < 15 ? '#ef4444' : st.arrSOC < 25 ? '#f59e0b' : '#22d3a7';
+        h += '<div class="stop-card" onclick="window._map.setView([' + ch.lat + ',' + ch.lng + '],14)">' +
+          '<div class="stop-num">' + (i+1) + '</div>' +
+          '<div class="stop-name">&#9889; ' + ch.name + '</div>' +
+          '<div class="stop-addr">' + (ch.address || '—') + ' &middot; ' + st.distFromStart + ' km from start</div>' +
+          '<div class="charge-bar"><div style="width:' + st.arrSOC + '%;background:' + ac + ';height:100%"></div><div style="width:' + (st.depSOC - st.arrSOC) + '%;background:rgba(34,211,167,.45);height:100%"></div></div>' +
+          '<div class="stop-stats">' +
+            '<div class="stop-tag">Arrive <span class="' + (st.arrSOC < 20 ? 'warn-hi' : 'hi') + '">' + st.arrSOC + '%</span></div>' +
+            '<div class="stop-tag">Depart <span class="hi">' + st.depSOC + '%</span></div>' +
+            '<div class="stop-tag">&#9201; <span class="hi">~' + st.chargeTime + ' min</span></div>' +
+            '<div class="stop-tag">' + ch.type + (ch.type === 'DC' || ch.type === 'Mixed' ? ' &#9889;' : '') + '</div>' +
+          '</div>' +
+          '<div class="charge-tip">' + st.tip + '</div>' +
+        '</div>';
+      });
+
+      if (ferry) {
+        h += '<div class="stop-card" style="border-color:#60a5fa"><div class="stop-num" style="background:#60a5fa">&#9860;</div>' +
+          '<div class="stop-name">Interislander / Bluebridge Ferry</div>' +
+          '<div class="stop-addr">Wellington &harr; Picton &middot; ~3.5 hours</div>' +
+          '<div class="charge-tip">Book ferry in advance. Some ferries offer EV charging on board. Arrive at least 45 min early.</div></div>';
+      }
+
+      h += '<div class="od-marker" style="border-color:rgba(248,113,113,.3)"><div class="od-dot" style="background:#f87171"></div><div><div class="od-label">Destination</div><div class="od-name">' + dest.name + '</div></div><div class="od-soc">' + arrivalSOC + '%</div></div>';
+
+      // Battery management section with cycle awareness
+      var mgmt;
+      var cycleExtra = '';
+      if (!isNaN(cycles) && cycles > 0) {
+        var d2 = cycleDeg(selectedCar.chem, cycles);
+        if (d2 && d2.remaining < 90) {
+          cycleExtra = '<br><br>&bull; <b>With ' + cycles + ' cycles:</b> Your battery has ~' + d2.remaining + '% original capacity. ';
+          if (d2.remaining < 80) cycleExtra += 'Consider a battery health diagnostic. Reduce fast charging frequency if possible.';
+          else cycleExtra += 'This is normal wear. Continue following best practices to extend lifespan.';
+        }
+      }
+      if (selectedCar.chem === 'LFP') {
+        mgmt = '<b>LFP Battery Management for your ' + selectedCar.name + ':</b><br><br>' +
+          '&bull; <b>Daily charging:</b> Charge to 100% — LFP handles this without significant wear<br>' +
+          '&bull; <b>Road trips:</b> Charge to 100% at each stop if time allows<br>' +
+          '&bull; <b>BMS calibration:</b> Do a full 0&rarr;100% charge monthly for accurate SOC readings<br>' +
+          '&bull; <b>Cold weather:</b> Precondition battery before DC charging. LFP loses ~15-25% range in cold<br>' +
+          '&bull; <b>Storage:</b> Store at 50-60% if leaving for extended periods' + cycleExtra;
+      } else {
+        mgmt = '<b>' + selectedCar.chem + ' Battery Management for your ' + selectedCar.name + ':</b><br><br>' +
+          '&bull; <b>Daily charging:</b> Charge to 80% to maximise battery lifespan<br>' +
+          '&bull; <b>Road trips:</b> 80% target at stops balances speed and health<br>' +
+          '&bull; <b>Avoid:</b> Sitting at 100% for hours — charge right before departure if needed<br>' +
+          '&bull; <b>Sweet spot:</b> Keep between 20-80% for best degradation profile<br>' +
+          '&bull; <b>Cold weather:</b> Precondition before fast charging. Expect 10-20% range reduction<br>' +
+          '&bull; <b>Tip:</b> Arriving at a charger with lower SOC means faster charge rates' + cycleExtra;
+      }
+      h += '<div class="specs-card" style="margin-top:14px;border-left:3px solid #f59e0b"><div style="font-size:12px;line-height:1.7;color:#7a8ba8">' + mgmt + '</div></div></div>';
+
+      results.innerHTML = h;
+    }).catch(function(err) {
+      console.error(err);
+      results.innerHTML = '<div style="padding:20px;text-align:center;color:#f87171">Error planning route. Please try again.<br><small>' + (err.message || err) + '</small></div>';
+    });
+  });
+
+  /* ════════════ LOAD CHARGER DATA — NZTA EVRoam (ArcGIS) ════════════ */
+  function addCharger(lat, lng, name, operator, address, connectors, type) {
+    allChargers.push({ lat:lat, lng:lng, name:name, operator:operator, address:address, connectors:connectors, type:type });
+  }
+
+  function flushChargersToMap() {
+    var markers = [];
+    allChargers.forEach(function(ch) {
+      markers.push(
+        L.marker([ch.lat, ch.lng], { icon:makeIcon(ch.type) })
+          .bindPopup('<b>' + ch.name + '</b><br><span style="color:#7a8ba8">' + ch.operator + '</span><br>' + ch.address + '<br><span style="color:' + chargerColor(ch.type) + ';font-weight:700">' + ch.type + '</span>' + (ch.connectors ? '<br><small style="color:#7a8ba8">' + ch.connectors + '</small>' : ''))
+      );
+    });
+    chargerCluster.clearLayers();
+    chargerCluster.addLayers(markers);
+  }
+
+  function processNZTAFeatures(features) {
+    // Detect coordinate system from first valid feature
+    var sample = null;
+    for (var si = 0; si < features.length && !sample; si++) {
+      var sc = features[si].geometry && features[si].geometry.coordinates;
+      if (sc && sc[0] && sc[1]) sample = sc;
+    }
+    // If coords look like NZGD2000 projected (large numbers), we need to convert
+    var isProjected = sample && (Math.abs(sample[0]) > 180 || Math.abs(sample[1]) > 90);
+
+    features.forEach(function(f) {
+      var c = f.geometry && f.geometry.coordinates;
+      if (!c) return;
+      var lng = c[0], lat = c[1];
+      if (!lat || !lng) return;
+
+      if (isProjected) {
+        // Approximate NZGD2000 (EPSG:2193) to WGS84 conversion
+        // NZGD2000 Transverse Mercator: origin lat -41, origin lng 173, false easting 1600000, false northing 10000000
+        var easting = lng, northing = lat;
+        // Rough inverse projection (good enough for marker placement)
+        lng = 173.0 + (easting - 1600000) / (111320 * Math.cos(-41 * Math.PI / 180));
+        lat = -41.0 + (northing - 10000000) / 110540;
+        // Validate converted coords are in NZ bounds
+        if (lat < -47.5 || lat > -34 || lng < 165 || lng > 179) return;
+      } else {
+        if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
+      }
+
+      var p = f.properties || {};
+      var name = p.name || p.Name || p.NAME || p.STATIONNAME || p.stationName || 'Unnamed';
+      var operator = p.operator || p.Operator || p.OPERATOR || p.owner || p.Owner || '';
+      var address = p.address || p.Address || p.ADDRESS || p.physicalAddress || p.PhysicalAddress || '';
+      var connectors = p.connectorsList || p.connectors || p.Connectors || p.CONNECTORS || '';
+      var ct = ((p.currentType || p.CurrentType || p.CURRENTTYPE || p.current_type || p.chargerType || p.ChargerType || '') + ' ' + connectors).toUpperCase();
+      var hasDC = ct.indexOf('DC') !== -1;
+      var hasAC = ct.indexOf('AC') !== -1 || (!hasDC);
+      var type = hasDC && hasAC ? 'Mixed' : hasDC ? 'DC' : 'AC';
+      addCharger(lat, lng, name, operator, address, connectors, type);
+    });
+  }
+
+  function finishLoad(source) {
+    flushChargersToMap();
+    document.getElementById('loader-msg').textContent = allChargers.length + ' chargers loaded' + (source ? ' (' + source + ')' : '');
+    setTimeout(function() { document.getElementById('loader').classList.add('hide'); }, 500);
+  }
+
+  function loadChargers() {
+    document.getElementById('loader-msg').textContent = 'Fetching NZ charger data...';
+
+    // Strategy 1: OpenChargeMap (most reliable from static hosting)
+    loadOCMFallback()
+      .catch(function(e) {
+        console.warn('OpenChargeMap failed:', e.message, '— trying NZTA...');
+        document.getElementById('loader-msg').textContent = 'Trying NZTA EVRoam...';
+
+        // Strategy 2: NZTA GeoJSON download (may fail due to CORS redirect)
+        return fetch('https://opendata-nzta.opendata.arcgis.com/datasets/NZTA::ev-roam-charging-stations.geojson?outSR=%7B%22latestWkid%22:4326,%22wkid%22:4326%7D')
+          .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+          .then(function(data) {
+            if (!data.features || data.features.length === 0) throw new Error('No features');
+            processNZTAFeatures(data.features);
+            if (allChargers.length > 0) { finishLoad('NZTA EVRoam'); return; }
+            throw new Error('No valid chargers');
+          });
+      })
+      .catch(function(e) {
+        console.error('All charger sources failed:', e);
+        document.getElementById('loader-msg').textContent = 'Could not load charger data. Route planning still works.';
+        setTimeout(function() { document.getElementById('loader').classList.add('hide'); }, 2000);
+      });
+  }
+
+  function processOCMData(data) {
+    data.forEach(function(poi) {
+      var ai = poi.AddressInfo;
+      if (!ai || !ai.Latitude || !ai.Longitude) return;
+      var name = ai.Title || 'Unnamed';
+      var address = [ai.AddressLine1, ai.Town, ai.Postcode].filter(Boolean).join(', ');
+      var operator = (poi.OperatorInfo && poi.OperatorInfo.Title) || '';
+      var conns = poi.Connections || [];
+      var hasDC = false, hasAC = false;
+      var connStr = conns.map(function(c) {
+        var ct = (c.CurrentType && c.CurrentType.Title) || '';
+        if (ct.indexOf('DC') !== -1) hasDC = true; else hasAC = true;
+        var pwr = c.PowerKW ? c.PowerKW + ' kW' : '';
+        var typ = (c.ConnectionType && c.ConnectionType.Title) || '';
+        return [typ, pwr, ct].filter(Boolean).join(', ');
+      }).join('; ');
+      var type = hasDC && hasAC ? 'Mixed' : hasDC ? 'DC' : 'AC';
+      addCharger(ai.Latitude, ai.Longitude, name, operator, address, connStr, type);
+    });
+  }
+
+  function loadOCMFallback() {
+    // OpenChargeMap requires API key for maxresults > 250.
+    // Fetch in regional batches (max 200 each) to stay under the limit.
+    var regions = [
+      { lat:-36.85, lng:174.76, label:'Auckland' },      // North Island - upper
+      { lat:-38.14, lng:176.25, label:'Rotorua' },        // North Island - central
+      { lat:-39.93, lng:175.05, label:'Palmerston North' },// North Island - lower
+      { lat:-41.29, lng:174.78, label:'Wellington' },      // Wellington region
+      { lat:-43.53, lng:172.64, label:'Christchurch' },    // South Island - upper
+      { lat:-45.87, lng:170.50, label:'Dunedin' },         // South Island - lower
+      { lat:-42.45, lng:171.21, label:'Greymouth' },       // West Coast
+      { lat:-46.41, lng:168.35, label:'Invercargill' }     // Southland
+    ];
+
+    var promises = regions.map(function(r) {
+      var url = 'https://api.openchargemap.io/v3/poi/?output=json&countrycode=NZ' +
+        '&latitude=' + r.lat + '&longitude=' + r.lng + '&distance=200' +
+        '&maxresults=200&compact=true&verbose=false';
+      return fetch(url).then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+      }).catch(function(err) {
+        console.warn('OCM batch ' + r.label + ' failed:', err.message);
+        return [];
+      });
+    });
+
+    return Promise.all(promises).then(function(results) {
+      var seen = {};
+      results.forEach(function(data) {
+        if (!Array.isArray(data)) return;
+        // Deduplicate by ID
+        data.forEach(function(poi) {
+          if (poi.ID && !seen[poi.ID]) {
+            seen[poi.ID] = true;
+            processOCMData([poi]);
+          }
+        });
+      });
+      if (allChargers.length > 0) {
+        finishLoad('OpenChargeMap');
+      } else {
+        throw new Error('No chargers from OpenChargeMap');
+      }
+    });
+  }
+
+  loadChargers();
+
+})();
+</script>
+</body>
+</html>
